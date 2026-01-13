@@ -8,6 +8,24 @@
   },
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "minicline-ActivityBar",
+          "title": "MiniCline",
+          "icon": "assets/icons/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "minicline-ActivityBar": [
+        {
+          "type": "webview",
+          "id": "minicline.SidebarProvider",
+          "name": "MiniCline"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "hello-world.showHelloWorld",

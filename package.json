@@ -26,12 +26,7 @@
         }
       ]
     },
-    "commands": [
-      {
-        "command": "hello-world.showHelloWorld",
-        "title": "Hello World (React + Vite): Show"
-      }
-    ]
+    "commands": []
   },
   "scripts": {
     "install:all": "npm install && cd webview-ui && npm install",

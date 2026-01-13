@@ -1,0 +1,20 @@
+out
+dist
+dist-standalone
+node_modules
+tmp
+.vscode-test/
+*.vsix
+
+webview-ui/src/**/*.js
+webview-ui/src/**/*.js.map
+
+*evals.env
+.env
+
+.worktrees
+
+## Generated files ##
+src/generated/
+src/shared/proto/
+webview-ui/src/services/grpc-client.ts

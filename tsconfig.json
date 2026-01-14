@@ -1,12 +1,56 @@
 {
-  "compilerOptions": {
-    "module": "commonjs",
-    "target": "es6",
-    "outDir": "out",
-    "lib": ["es6", "dom"],
-    "sourceMap": true,
-    "rootDir": "src",
-    "strict": true
-  },
-  "exclude": ["node_modules", ".vscode-test", "webview-ui"]
+	"compilerOptions": {
+		"module": "esnext",
+		"target": "es2022",
+		"moduleResolution": "Bundler",
+		"lib": [
+			"es2022",
+			"dom"
+		],
+		"sourceMap": true,
+		"rootDir": ".",
+		"strict": true,
+		"useUnknownInCatchVariables": false,
+		"baseUrl": ".",
+		"paths": {
+			"@/*": [
+				"src/*"
+			],
+			"@api/*": [
+				"src/core/api/*"
+			],
+			"@core/*": [
+				"src/core/*"
+			],
+			"@generated/*": [
+				"src/generated/*"
+			],
+			"@hosts/*": [
+				"src/hosts/*"
+			],
+			"@integrations/*": [
+				"src/integrations/*"
+			],
+			"@packages/*": [
+				"src/packages/*"
+			],
+			"@services/*": [
+				"src/services/*"
+			],
+			"@shared/*": [
+				"src/shared/*"
+			],
+			"@utils/*": [
+				"src/utils/*"
+			]
+		}
+	},
+	"include": [
+		"src/**/*"
+	],
+	"exclude": [
+		"node_modules",
+		".vscode-test",
+		"webview-ui"
+	]
 }

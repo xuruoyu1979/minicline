@@ -10,12 +10,13 @@ import {
 } from "vscode";
 import { getUri } from "../utilities/getUri";
 import { getNonce } from "../utilities/getNonce";
+import * as weather from "weather-js";
 
 export class WeatherViewProvider implements WebviewViewProvider {
   public static readonly viewType = "minicline.SidebarProvider";
   private _disposables: Disposable[] = [];
 
-  constructor(private readonly _extensionUri: Uri) {}
+  constructor(private readonly _extensionUri: Uri) { }
 
   public resolveWebviewView(
     webviewView: WebviewView,
@@ -66,44 +67,31 @@ export class WeatherViewProvider implements WebviewViewProvider {
   }
 
   private _setWebviewMessageListener(webviewView: WebviewView) {
-    // webviewView.webview.onDidReceiveMessage((message) => {
-    //   const command = message.command;
-    //   const location = message.location;
-    //   const unit = message.unit;
-
-    //   switch (command) {
-    //     case "weather":
-    //       weather.find({ search: location, degreeType: unit }, (err: any, result: any) => {
-    //         if (err) {
-    //           webviewView.webview.postMessage({
-    //             command: "error",
-    //             message: "Sorry couldn't get weather at this time...",
-    //           });
-    //           return;
-    //         }
-    //         // Get the weather forecast results
-    //         const weatherForecast = result[0];
-    //         // Pass the weather forecast object to the webview
-    //         webviewView.webview.postMessage({
-    //           command: "weather",
-    //           payload: JSON.stringify(weatherForecast),
-    //         });
-    //       });
-    //       break;
-    //   }
-    // });
     webviewView.webview.onDidReceiveMessage(
       (message: any) => {
         const command = message.command;
-        const text = message.text;
+        const location = message.location;
+        const unit = message.unit;
 
         switch (command) {
-          case "hello":
-            // Code that should run in response to the hello message command
-            window.showInformationMessage(text);
-            return;
-          // Add more switch case statements here as more webview message commands
-          // are created within the webview context (i.e. inside media/main.js)
+          case "weather":
+            weather.find({ search: location, degreeType: unit }, (err: any, result: any) => {
+              if (err) {
+                webviewView.webview.postMessage({
+                  command: "error",
+                  message: "Sorry couldn't get weather at this time...",
+                });
+                return;
+              }
+              // Get the weather forecast results
+              const weatherForecast = result[0];
+              // Pass the weather forecast object to the webview
+              webviewView.webview.postMessage({
+                command: "weather",
+                payload: JSON.stringify(weatherForecast),
+              });
+            });
+            break;
         }
       },
       undefined,

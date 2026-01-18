@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package minicline;
+
+service WeatherService {
+    rpc getWeather(GetWeatherRequest) returns (GetWeatherResponse);
+}
+
+message GetWeatherRequest {
+  string location = 1;
+  string unit = 2;
+}
+
+message GetWeatherResponse {
+    string skytext = 1;
+    string temperature = 2;
+    string degreeType = 3;
+}

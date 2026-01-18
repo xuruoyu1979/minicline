@@ -1,51 +1,34 @@
-import { vscode } from "./utilities/vscode";
 import { VSCodeButton, VSCodeDropdown, VSCodeOption, VSCodeProgressRing, VSCodeTextField } from "@vscode/webview-ui-toolkit/react";
 import "./App.css";
 import { Dropdown, ProgressRing, TextField } from "@vscode/webview-ui-toolkit";
-import { useEffect } from "react";
-
-interface WeatherData {
-  current: WeatherData;
-  skytext: string;
-  temperature: string;
-  location: {
-    degreetype: string;
-  }
-}
+import { useCallback } from "react";
+import { WeatherServiceClient } from "./services/grpc-client";
+import { GetWeatherRequest, GetWeatherResponse } from "@shared/proto/minicline/weather";
 
 function App() {
-
-  useEffect(() => {
-
-    window.addEventListener("message", (event) => {
-      const command = event.data.command;
-
-      switch (command) {
-        case "weather":
-          const weatherData = JSON.parse(event.data.payload);
-          displayWeatherData(weatherData);
-          break;
-        case "error":
-          displayError(event.data.message);
-          break;
-      }
-    });
-  }, []);
 
   function checkWeather() {
     const location = document.getElementById("location") as TextField;
     const unit = document.getElementById("unit") as Dropdown;
 
-    // Passes a message back to the extension context with the location that
-    // should be searched for and the degree unit (F or C) that should be returned
-    vscode.postMessage({
-      command: "weather",
-      location: location.value,
-      unit: unit.value,
-    });
+    handleCheckWeatherMessage(location.value, unit.value);
 
     displayLoadingState();
   }
+
+  const handleCheckWeatherMessage = useCallback(
+    async (locationValue: string, unitValue: string) => {
+      let messageSent = false;
+
+      const result:GetWeatherResponse = await WeatherServiceClient.getWeather(
+        GetWeatherRequest.create({
+        location: locationValue,
+        unit: unitValue
+        }),
+      );
+      displayWeatherData(result);
+    }, []
+  );
 
   function displayLoadingState() {
     const loading = document.getElementById("loading") as ProgressRing;
@@ -58,7 +41,7 @@ function App() {
     }
   }
 
-  function displayWeatherData(weatherData: WeatherData) {
+  function displayWeatherData(weatherData: GetWeatherResponse) {
     const loading = document.getElementById("loading") as ProgressRing;
     const icon = document.getElementById("icon");
     const summary = document.getElementById("summary");
@@ -81,16 +64,16 @@ function App() {
     }
   }
 
-  function getWeatherSummary(weatherData: WeatherData) {
-    const skyText = weatherData.current.skytext;
-    const temperature = weatherData.current.temperature;
-    const degreeType = weatherData.location.degreetype;
+  function getWeatherSummary(weatherData: GetWeatherResponse) {
+    const skyText = weatherData.skytext;
+    const temperature = weatherData.temperature;
+    const degreeType = weatherData.degreeType;
 
     return `${skyText}, ${temperature}${degreeType}`;
   }
 
-  function getWeatherIcon(weatherData: WeatherData) {
-    const skyText = weatherData.current.skytext.toLowerCase();
+  function getWeatherIcon(weatherData: GetWeatherResponse) {
+    const skyText = weatherData.skytext.toLowerCase();
     let icon = "";
 
     switch (skyText) {

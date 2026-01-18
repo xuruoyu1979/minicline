@@ -1,0 +1,114 @@
+#!/usr/bin/env node
+/* eslint-disable @typescript-eslint/naming-convention */
+
+import chalk from "chalk";
+import { execSync } from "child_process";
+import * as fs from "fs/promises";
+import * as path from "path";
+import { globby } from "globby";
+import { createRequire } from "module";
+import { rmrf } from "./file-utils.mjs";
+import { main as generateProtoBusSetup } from "./generate-protobus-setup.mjs";
+
+const require = createRequire(import.meta.url);
+const PROTOC = path.join(require.resolve("grpc-tools"), "../bin/protoc");
+
+const PROTO_DIR = path.resolve("proto");
+const TS_OUT_DIR = path.resolve("src/shared/proto");
+const GRPC_JS_OUT_DIR = path.resolve("src/generated/grpc-js");
+const DESCRIPTOR_OUT_DIR = path.resolve("dist-standalone/proto");
+
+const isWindows = process.platform === "win32";
+const TS_PROTO_PLUGIN = isWindows
+	? path.resolve("node_modules/.bin/protoc-gen-ts_proto.cmd") // Use the .bin directory path for Windows
+	: require.resolve("ts-proto/protoc-gen-ts_proto");
+
+const TS_PROTO_OPTIONS = [
+	"env=node",
+	"esModuleInterop=true",
+	"outputServices=generic-definitions", // output generic ServiceDefinitions
+	"outputIndex=true", // output an index file for each package which exports all protos in the package.
+	"useOptionals=none", // scalar and message fields are required unless they are marked as optional.
+	"useDate=false", // Timestamp fields will not be automatically converted to Date.
+];
+
+async function main() {
+	await cleanup();
+	await compileProtos();
+	await generateProtoBusSetup();
+}
+
+function log_verbose(s) {
+	if (process.argv.includes("-v") || process.argv.includes("--verbose")) {
+		console.log(s);
+	}
+}
+
+async function cleanup() {
+	// Clean up existing generated files
+	log_verbose(chalk.cyan("Cleaning up existing generated TypeScript files..."));
+	await rmrf(TS_OUT_DIR);
+	await rmrf("src/generated");
+}
+
+async function tsProtoc(outDir, protoFiles, protoOptions) {
+	// Build the protoc command with proper path handling for cross-platform
+	const command = [
+		PROTOC,
+		`--proto_path="${PROTO_DIR}"`,
+		`--plugin=protoc-gen-ts_proto="${TS_PROTO_PLUGIN}"`,
+		`--ts_proto_out="${outDir}"`,
+		`--ts_proto_opt=${protoOptions.join(",")} `,
+		...protoFiles.map((s) => `"${s}"`),
+	].join(" ");
+	try {
+		log_verbose(chalk.cyan(`Generating TypeScript code in ${outDir} for:\n${protoFiles.join("\n")}...`));
+		log_verbose(command);
+		execSync(command, { stdio: "inherit" });
+	} catch (error) {
+		console.error(chalk.red("Error generating TypeScript for proto files:"), error);
+		process.exit(1);
+	}
+}
+
+async function compileProtos() {
+	console.log(chalk.bold.blue("Compiling Protocol Buffers..."));
+
+	// Create output directories if they don't exist
+	for (const dir of [TS_OUT_DIR, GRPC_JS_OUT_DIR, DESCRIPTOR_OUT_DIR]) {
+		await fs.mkdir(dir, { recursive: true });
+	}
+
+	// Process all proto files
+	const protoFiles = await globby("**/*.proto", { cwd: PROTO_DIR, realpath: true });
+	console.log(chalk.cyan(`Processing ${protoFiles.length} proto files from`), PROTO_DIR);
+
+	tsProtoc(TS_OUT_DIR, protoFiles, TS_PROTO_OPTIONS);
+	// grpc-js is used to generate service impls for the ProtoBus service.
+	tsProtoc(GRPC_JS_OUT_DIR, protoFiles, ["outputServices=grpc-js", ...TS_PROTO_OPTIONS]);
+
+	const descriptorFile = path.join(DESCRIPTOR_OUT_DIR, "descriptor_set.pb");
+	const descriptorProtocCommand = [
+		PROTOC,
+		`--proto_path="${PROTO_DIR}"`,
+		`--descriptor_set_out="${descriptorFile}"`,
+		"--include_imports",
+		...protoFiles,
+	].join(" ");
+	try {
+		log_verbose(chalk.cyan("Generating descriptor set..."));
+		execSync(descriptorProtocCommand, { stdio: "inherit" });
+	} catch (error) {
+		console.error(chalk.red("Error generating descriptor set for proto file:"), error);
+		process.exit(1);
+	}
+
+	log_verbose(chalk.green("Protocol Buffer code generation completed successfully."));
+	log_verbose(chalk.green(`TypeScript files generated in: ${TS_OUT_DIR}`));
+}
+
+// Run the main function
+main().catch((error) => {
+	console.error(chalk.red("Error:"), error);
+	process.exit(1);
+});

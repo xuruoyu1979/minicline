@@ -7,22 +7,34 @@ import {
   WebviewView,
   WebviewViewProvider,
   WebviewViewResolveContext,
+  ExtensionContext,
 } from "vscode";
 import { getUri } from "../utilities/getUri";
 import { getNonce } from "../utilities/getNonce";
-import * as weather from "weather-js";
+import { WebviewMessage } from "@/shared/WebviewMessage";
+import { ExtensionMessage } from "@/shared/ExtensionMessage";
+import { Controller } from "@/core/controller";
+import { handleGrpcRequest } from "@/core/controller/grpc-handler";
 
 export class WeatherViewProvider implements WebviewViewProvider {
   public static readonly viewType = "minicline.SidebarProvider";
+
+  private webview?: WebviewView;
+  private controller?: Controller;
   private _disposables: Disposable[] = [];
 
-  constructor(private readonly _extensionUri: Uri) { }
+  constructor(private readonly _extensionUri: Uri, private readonly _context: ExtensionContext) {
+    // Create controller with cache service
+    this.controller = new Controller(_context);
+  }
 
   public resolveWebviewView(
     webviewView: WebviewView,
     context: WebviewViewResolveContext,
     _token: CancellationToken
   ) {
+
+    this.webview = webviewView;
     // Allow scripts in the webview
     webviewView.webview.options = {
       // Enable JavaScript in the webview
@@ -68,34 +80,44 @@ export class WeatherViewProvider implements WebviewViewProvider {
 
   private _setWebviewMessageListener(webviewView: WebviewView) {
     webviewView.webview.onDidReceiveMessage(
-      (message: any) => {
-        const command = message.command;
-        const location = message.location;
-        const unit = message.unit;
-
-        switch (command) {
-          case "weather":
-            weather.find({ search: location, degreeType: unit }, (err: any, result: any) => {
-              if (err) {
-                webviewView.webview.postMessage({
-                  command: "error",
-                  message: "Sorry couldn't get weather at this time...",
-                });
-                return;
-              }
-              // Get the weather forecast results
-              const weatherForecast = result[0];
-              // Pass the weather forecast object to the webview
-              webviewView.webview.postMessage({
-                command: "weather",
-                payload: JSON.stringify(weatherForecast),
-              });
-            });
-            break;
-        }
+      (message: WebviewMessage) => {
+        this.handleWebviewMessage(message);
       },
       undefined,
       this._disposables
     );
+  }
+
+  /**
+* Sets up an event listener to listen for messages passed from the webview context and
+* executes code based on the message that is received.
+*
+* @param webview A reference to the extension webview
+*/
+  async handleWebviewMessage(message: WebviewMessage) {
+    const postMessageToWebview = (response: ExtensionMessage) => this.postMessageToWebview(response);
+    switch (message.type) {
+      case "grpc_request": {
+        if (message.grpc_request) {
+          if (this.controller) {
+            await handleGrpcRequest(this.controller, postMessageToWebview, message.grpc_request);
+          }
+        }
+        break;
+      }
+      default: {
+        console.error("Received unhandled WebviewMessage type:", JSON.stringify(message));
+      }
+    }
+  }
+
+  /**
+   * Sends a message from the extension to the webview.
+   *
+   * @param message - The message to send to the webview
+   * @returns A thenable that resolves to a boolean indicating success, or undefined if the webview is not available
+   */
+  private async postMessageToWebview(message: ExtensionMessage): Promise<boolean | undefined> {
+    return this.webview?.webview.postMessage(message);
   }
 }

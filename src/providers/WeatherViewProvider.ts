@@ -54,6 +54,7 @@ export class WeatherViewProvider implements WebviewViewProvider {
   private _getWebviewContent(webview: Webview, extensionUri: Uri) {
     // The CSS file from the React build output
     const stylesUri = getUri(webview, extensionUri, ["webview-ui", "build", "assets", "index.css"]);
+    const codiconsUrl = getUri(webview, extensionUri, ["node_modules", "@vscode", "codicons", "dist", "codicon.css"]);
     // The JS file from the React build output
     const scriptUri = getUri(webview, extensionUri, ["webview-ui", "build", "assets", "index.js"]);
 
@@ -66,8 +67,13 @@ export class WeatherViewProvider implements WebviewViewProvider {
         <head>
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+          <meta http-equiv="Content-Security-Policy" content="default-src 'none';
+          font-src ${webview.cspSource} data:;  
+          img-src ${webview.cspSource} https: data:; 
+          style-src ${webview.cspSource}; 
+          script-src 'nonce-${nonce}';">
           <link rel="stylesheet" type="text/css" href="${stylesUri}">
+          <link href="${codiconsUrl}" rel="stylesheet" />
           <title>Hello World</title>
         </head>
         <body>

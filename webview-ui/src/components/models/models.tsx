@@ -32,7 +32,7 @@ function ModelBar() {
                         </VSCodeOption>
                     ))}
                 </VSCodeDropdown>
-                <VSCodeButton id="listmodels-button" className="listmodelBtn" onClick={handleListModelsMessage}>Refresh</VSCodeButton>
+                <span className="codicon codicon-refresh" onClick={handleListModelsMessage}></span>
             </div>
         </>
     );

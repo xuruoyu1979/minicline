@@ -59,6 +59,7 @@
   "dependencies": {
     "weather-js": "^2.0.0",
     "@grpc/grpc-js": "^1.9.15",
+    "@vscode/codicons": "^0.0.36",
     "axios": "^1.13.2"
   }
 }

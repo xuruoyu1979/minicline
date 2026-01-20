@@ -15,7 +15,7 @@ function Chatbox() {
                 </div>
                 <div className="button-container">
                 <div>
-                    <VSCodeButton className="sendBtn">Send</VSCodeButton>
+                    <span className="codicon codicon-send"></span>
                 </div>
                 </div>
             </div>

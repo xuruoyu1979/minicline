@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package minicline;
+
+message EmptyRequest {}
+
+message StringArray {
+  repeated string values = 1;
+}

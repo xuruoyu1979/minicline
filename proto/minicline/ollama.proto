@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package minicline;
+
+import "minicline/common.proto";
+
+service OllamaService {
+    rpc listModels(EmptyRequest) returns (StringArray);
+}

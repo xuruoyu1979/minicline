@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package minicline;
+
+message Message {
+    string content = 1;
+    MessageOwn owner = 2;
+}
+
+enum MessageOwn {
+    SYSTEM = 0;
+    ASSISTANT = 1;
+    USER = 2;
+}

@@ -8,7 +8,10 @@ export function activate(context: ExtensionContext) {
   // Register the provider for a Webview View
   const miniclineViewDisposable = window.registerWebviewViewProvider(
     MiniClineViewProvider.viewType,
-    provider
+    provider,
+    {
+			webviewOptions: { retainContextWhenHidden: true },
+		}
   );
 
   context.subscriptions.push(miniclineViewDisposable);

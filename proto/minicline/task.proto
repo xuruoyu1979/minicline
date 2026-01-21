@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package minicline;
+
+import "minicline/common.proto";
+
+service TaskService {
+  rpc newTask(NewTaskRequest) returns (String);
+}
+
+message NewTaskRequest {
+  string model = 1;
+  string text = 2;
+}

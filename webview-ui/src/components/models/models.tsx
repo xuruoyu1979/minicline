@@ -5,7 +5,7 @@ import { useCallback, useState } from "react";
 
 import "./models.css";
 
-function ModelBar() {
+function ModelBar({ selectedModel, selectModel }: { selectedModel: string, selectModel: Function }) {
 
     const initModel: string[] = [];
 
@@ -18,6 +18,7 @@ function ModelBar() {
             const result: StringArray = await OllamaServiceClient.listModels(EmptyRequest.create());
             console.log("models:", result)
             setModels(result.values);
+            selectModel(result.values[0]);
         }, [models]
     );
 
@@ -25,7 +26,7 @@ function ModelBar() {
         <>
             <div className="models-container">
                 <span>Model:</span>
-                <VSCodeDropdown id="models" className="modellist">
+                <VSCodeDropdown id="models" className="modellist" onChange={(e: any) => selectModel(e.target._value)}>
                     {models?.map((model: string) => (
                         <VSCodeOption key={model} value={model}>
                             {model}

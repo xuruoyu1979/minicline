@@ -1,15 +1,15 @@
 import { commands, window, ExtensionContext } from "vscode";
-import { WeatherViewProvider } from "./providers/WeatherViewProvider";
+import { MiniClineViewProvider } from "./providers/MiniClineViewProvider";
 
 export function activate(context: ExtensionContext) {
   // Instantiate a new instance of the WeatherViewProvider class
-  const provider = new WeatherViewProvider(context.extensionUri, context);
+  const provider = new MiniClineViewProvider(context.extensionUri, context);
 
   // Register the provider for a Webview View
-  const weatherViewDisposable = window.registerWebviewViewProvider(
-    WeatherViewProvider.viewType,
+  const miniclineViewDisposable = window.registerWebviewViewProvider(
+    MiniClineViewProvider.viewType,
     provider
   );
 
-  context.subscriptions.push(weatherViewDisposable);
+  context.subscriptions.push(miniclineViewDisposable);
 }

@@ -16,7 +16,7 @@ import { ExtensionMessage } from "@/shared/ExtensionMessage";
 import { Controller } from "@/core/controller";
 import { handleGrpcRequest } from "@/core/controller/grpc-handler";
 
-export class WeatherViewProvider implements WebviewViewProvider {
+export class MiniClineViewProvider implements WebviewViewProvider {
   public static readonly viewType = "minicline.SidebarProvider";
 
   private webview?: WebviewView;

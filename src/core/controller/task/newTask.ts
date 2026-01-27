@@ -10,6 +10,6 @@ import { String } from "@shared/proto/minicline/common";
  */
 export async function newTask(controller: Controller, request: NewTaskRequest): Promise<String> {
     console.log(request);
-    const taskId = "fakeTaskId";
+    const taskId = await controller.initTask(request.model, request.text);
 	return String.create({ value: taskId || "" });
 }

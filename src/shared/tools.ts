@@ -5,6 +5,7 @@ export type MiniClineTool = AnthropicTool;
 
 // Define available tool ids
 export enum MiniClineDefaultTool {
+	ATTEMPT = "attempt_completion",
 	FILE_NEW = "write_to_file",
 }
 

@@ -6,9 +6,10 @@ import { ApiStream } from "@/core/api/transform/stream";
 import Anthropic from "@anthropic-ai/sdk";
 import { FocusChainPrompts } from "@/core/prompts/focus";
 import { AssistantMessageContent, parseAssistantMessageV2, ToolUse } from "@/core/assistant-message";
-import cloneDeep from "clone-deep";
-import path from "path";
-import * as fs from 'fs/promises';
+import { formatResponse } from "@/core/prompts/response";
+import { TaskState } from "./TaskState";
+import { ToolExecutor } from "./ToolExecutor";
+import { MiniClineDefaultTool } from "@/shared/tools";
 
 export class Task {
     // Core task variables
@@ -17,14 +18,17 @@ export class Task {
     private task: string;
     private cwd: string;
 
+    taskState: TaskState;
+
     // Core dependencies
     private controller: Controller;
 
     // Service handlers
     api: ApiHandler;
 
-    assistantMessageContent: AssistantMessageContent[] = [];
-    currentStreamingContentIndex = 0;
+    private toolExecutor: ToolExecutor;
+
+    private apiConversationHistory: Anthropic.MessageParam[] = [];
 
     constructor(
         controller: Controller,
@@ -39,64 +43,138 @@ export class Task {
         this.cwd = cwd;
 
         this.api = new OllamaHandler(this.model);
+        this.taskState = new TaskState();
+        this.toolExecutor = new ToolExecutor(
+            this.controller.context,
+            this.taskState,
+            this.api,
+            cwd,
+            this.taskId,
+            (async () => { }),
+        );
     };
 
     public async startTask(): Promise<void> {
-        const processedUserContent: Anthropic.TextBlockParam[] = [
-            {
-                type: "text",
-                text: `<task>\n${this.task}\n</task>`,
-            }
-        ];
 
-        processedUserContent.push({
+        this.taskState.isInitialized = true;
+
+        this.taskState.userMessageContent.push({
+            type: "text",
+            text: `<task>\n${this.task}\n</task>`,
+        });
+
+        this.taskState.userMessageContent.push({
             type: "text",
             text: FocusChainPrompts.recommended,
         });
 
+        this.apiConversationHistory.push({
+            role: "user",
+            content: this.taskState.userMessageContent,
+        });
 
-        let assistantMessage = ""; // For UI display (includes XML)
-        const startTime = performance.now(); // 开始时间
-
-        const stream = this.attemptApiRequest(processedUserContent); // yields only if the first chunk is successful, otherwise will allow the user to retry the request (most likely due to rate limit error, which gets thrown on the first chunk)
-        try {
-            for await (const chunk of stream) {
-                switch (chunk.type) {
-                    case "usage": {
-                        break;
-                    }
-                    case "tool_calls": {
-                        break;
-                    }
-                    case "text": {
-                        assistantMessage += chunk.text;
-                        this.assistantMessageContent = parseAssistantMessageV2(assistantMessage);
-                        this.presentAssistantMessage();
-                        break;
-                    }
-                }
-            }
-        } catch (error) {
-            console.log(error);
-        }
-
-        const endTime = performance.now();
-        const duration = endTime - startTime;
-        console.log(`⏱️  耗时: ${duration.toFixed(2)}ms`);
-
-        this.currentStreamingContentIndex = 0;
+        this.initiateTaskLoop();
     }
 
-    async *attemptApiRequest(processedUserContent: Anthropic.TextBlockParam[]): ApiStream {
+    private async initiateTaskLoop(): Promise<void> {
+        while (!this.taskState.abort) {
+            const didEndLoop = await this.makeClineRequests();
+
+            //const totalCost = this.calculateApiCost(totalInputTokens, totalOutputTokens)
+            if (didEndLoop) {
+                // For now a task never 'completes'. This will only happen if the user hits max requests and denies resetting the count.
+                //this.say("task_completed", `Task completed. Total API usage cost: ${totalCost}`)
+                break;
+            } else {
+                this.taskState.userMessageContent = [];
+            }
+        }
+    }
+
+    async makeClineRequests(): Promise<boolean> {
+        try {
+            // reset streaming state
+            this.taskState.isStreaming = true;
+            this.taskState.currentStreamingContentIndex = 0;
+
+            let assistantMessage = ""; // For UI display (includes XML)
+
+            const stream = this.attemptApiRequest(); // yields only if the first chunk is successful, otherwise will allow the user to retry the request (most likely due to rate limit error, which gets thrown on the first chunk)
+            try {
+                for await (const chunk of stream) {
+                    switch (chunk.type) {
+                        case "usage": {
+                            break;
+                        }
+                        case "tool_calls": {
+                            // Accumulate tool use blocks in proper Anthropic format
+                            break;
+                        }
+                        case "text": {
+                            assistantMessage += chunk.text;
+                            break;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.log(error);
+            } finally {
+                this.taskState.isStreaming = false;
+            }
+
+            const assistantHasContent = assistantMessage.length > 0;
+            console.log(assistantMessage);
+            this.taskState.userMessageContent = [];
+
+            if (assistantHasContent) {
+                let didEndLoop = false;
+                this.taskState.assistantMessageContent = parseAssistantMessageV2(assistantMessage);
+                for (const assistantMsg of this.taskState.assistantMessageContent) {
+                    if (assistantMsg.type === "text") {
+                        this.apiConversationHistory.push({
+                            role: "assistant",
+                            content: assistantMsg.content,
+                        });
+                    }
+                }
+
+                // if the model did not tool use, then we need to tell it to either use a tool or attempt_completion
+                const didToolUse = this.taskState.assistantMessageContent.some((block) => block.type === "tool_use");
+                if (!didToolUse) {
+                    // normal request where tool use is required
+                    this.taskState.userMessageContent.push({
+                        type: "text",
+                        text: formatResponse.noToolsUsed(false),
+                    });
+                    this.taskState.consecutiveMistakeCount++;
+                } else {
+                    // Process the new text content as it streams in without awaiting for full message
+                    for (const block of this.taskState.assistantMessageContent) {
+                        if (block.type === "tool_use" && block.name === MiniClineDefaultTool.ATTEMPT) {
+                            didEndLoop = true;
+                        }
+                        await this.presentAssistantMessage(block);
+                    }
+                }
+                this.apiConversationHistory.push({
+                    role: "user",
+                    content: this.taskState.userMessageContent,
+                });
+                return didEndLoop;
+            } else {
+                return true;
+            }
+        } catch (_error) {
+            // this should never happen since the only thing that can throw an error is the attemptApiRequest, which is wrapped in a try catch that sends an ask where if noButtonClicked, will clear current task and destroy this instance. However to avoid unhandled promise rejection, we will end this loop which will end execution of this instance (see startTask)
+            return true; // needs to be true so parent loop knows to end task
+        }
+    }
+
+    async *attemptApiRequest(): ApiStream {
         const systemPrompt = await getSystemPrompt();
 
-        const userMessages: Anthropic.MessageParam[] = [{
-            role: "user",
-            content: processedUserContent
-        }];
-
         // Response API requires native tool calls to be enabled
-        const stream = this.api.createMessage(systemPrompt, userMessages);
+        const stream = this.api.createMessage(systemPrompt, this.apiConversationHistory);
 
         const iterator = stream[Symbol.asyncIterator]();
 
@@ -114,32 +192,17 @@ export class Task {
         yield* iterator;
     }
 
-    async presentAssistantMessage() {
-        const block = cloneDeep(this.assistantMessageContent[this.currentStreamingContentIndex]); // need to create copy bc while stream is updating the array, it could be updating the reference block properties too
+    async presentAssistantMessage(block: AssistantMessageContent) {
         if (block) {
             switch (block.type) {
                 case "text": {
                     break;
                 }
-                case "tool_use":
-                    await this.executeTool(block);
+                case "tool_use": {
+                    await this.toolExecutor.executeTool(block);
                     break;
+                }
             }
-            if (!block.partial) {
-                this.currentStreamingContentIndex++; // need to increment regardless, so when read stream calls this function again it will be streaming the next block
-                return;
-            }
-        }
-    }
-
-    /**
-     * Main entry point for tool execution - called by Task class
-     */
-    public async executeTool(block: ToolUse): Promise<void> {
-        if (block.params.path && block.params.content) {
-            const filePath = path.join(this.cwd, block.params.path);
-            // 将内容写入文件
-            await fs.writeFile(filePath, block.params.content, 'utf-8');
         }
     }
 }

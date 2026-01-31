@@ -30,9 +30,15 @@ async function generateWebviewProtobusClients(protobusServices) {
             const requestType = getFqn(rpc.requestType.type.name);
             const responseType = getFqn(rpc.responseType.type.name);
 
+			if (!rpc.responseStream) {
                 rpcs.push(`    static async ${rpcName}(request: ${requestType}): Promise<${responseType}> {
 		return this.makeUnaryRequest("${rpcName}", request, ${requestType}.toJSON, ${responseType}.fromJSON)
 	}`);
+			} else {
+				rpcs.push(`    static ${rpcName}(request: ${requestType}, callbacks: Callbacks<${responseType}>): ()=>void {
+		return this.makeStreamingRequest("${rpcName}", request, ${requestType}.toJSON, ${responseType}.fromJSON, callbacks)
+	}`)				
+			}
         }
         clients.push(`export class ${serviceName}Client extends ProtoBusClient {
 	static override serviceName: string = "minicline.${serviceName}"

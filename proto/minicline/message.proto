@@ -2,6 +2,13 @@ syntax = "proto3";
 
 package minicline;
 
+import "minicline/common.proto";
+
+
+service MessageService {
+  rpc subscribeToMessage(EmptyRequest) returns (stream Message);
+}
+
 message Message {
     string content = 1;
     MessageOwn owner = 2;

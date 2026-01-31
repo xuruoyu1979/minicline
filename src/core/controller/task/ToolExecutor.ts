@@ -6,6 +6,9 @@ import { ToolExecutorCoordinator } from "./tools/ToolExecutorCoordinator";
 import { TaskConfig } from "./TaskConfig";
 import { WriteToFileToolHandler } from "./tools/handlers/WriteToFileToolHandler";
 import { AttemptCompletionHandler } from "./tools/handlers/AttemptCompletionHandler";
+import { sendMessageUpdate } from "../message/subscribeToMessage";
+import { Message } from "@/shared/proto/minicline/message";
+import { MessageOwn } from "@/generated/grpc-js/minicline/message";
 
 export class ToolExecutor {
 	private coordinator: ToolExecutorCoordinator;
@@ -158,10 +161,15 @@ export class ToolExecutor {
 				description = handler ? handler.getDescription(block) : block.name;
 			}
 			// Create ToolResultBlockParam with description and result
+			const resultContent = `${description} Result:\n${resultText}`;
+			sendMessageUpdate(Message.create({
+				content: resultContent,
+				owner: MessageOwn.ASSISTANT
+			}));
 			this.taskState.userMessageContent.push(
 				{
 					type: "text",
-					text: `${description} Result:\n${resultText}`,
+					text: resultContent,
 				});
 		}
 	};

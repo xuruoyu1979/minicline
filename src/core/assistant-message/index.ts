@@ -10,9 +10,11 @@ export interface TextStreamContent {
 }
 
 export const toolParamNames = [
+	"command",
 	"path",
 	"content",
 	"task_progress",
+	"result",
 ] as const;
 
 export type ToolParamName = (typeof toolParamNames)[number];

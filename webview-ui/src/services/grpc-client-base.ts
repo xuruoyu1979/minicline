@@ -53,9 +53,69 @@ export abstract class ProtoBusClient {
 					service: this.serviceName,
 					method: methodName,
 					message: encodeMessage(request, encodeRequest),
-					request_id: requestId
+					request_id: requestId,
+					is_streaming: false
 				},
 			});
 		})
+	}
+
+	static makeStreamingRequest<TRequest, TResponse>(
+		methodName: string,
+		request: TRequest,
+		encodeRequest: (_: TRequest) => unknown,
+		decodeResponse: (_: { [key: string]: any }) => TResponse,
+		callbacks: Callbacks<TResponse>,
+	): () => void {
+		const requestId = uuidv4();
+		// Set up listener for streaming responses
+		const handleResponse = (event: MessageEvent) => {
+			const message = event.data;
+			if (message.type === "grpc_response" && message.grpc_response?.request_id === requestId) {
+				if (message.grpc_response.message) {
+					// Process streaming message
+					const response = decodeMessage(message.grpc_response.message, decodeResponse);
+					callbacks.onResponse(response);
+				} else if (message.grpc_response.error) {
+					// Handle error
+					if (callbacks.onError) {
+						callbacks.onError(new Error(message.grpc_response.error));
+					}
+					// Only remove the event listener on error
+					window.removeEventListener("message", handleResponse);
+				} else {
+					console.error("Received ProtoBus message with no response or error ", JSON.stringify(message));
+				}
+				if (message.grpc_response.is_streaming === false) {
+					if (callbacks.onComplete) {
+						callbacks.onComplete();
+					}
+					// Only remove the event listener when the stream is explicitly ended
+					window.removeEventListener("message", handleResponse);
+				}
+			}
+		}
+		window.addEventListener("message", handleResponse);
+		vscode.postMessage({
+			type: "grpc_request",
+			grpc_request: {
+				service: this.serviceName,
+				method: methodName,
+				message: encodeMessage(request, encodeRequest),
+				request_id: requestId,
+				is_streaming: true,
+			},
+		});
+		// Return a function to cancel the stream
+		return () => {
+			window.removeEventListener("message", handleResponse);
+			vscode.postMessage({
+				type: "grpc_request_cancel",
+				grpc_request_cancel: {
+					request_id: requestId,
+				},
+			});
+			console.log(`[DEBUG] Sent cancellation for request: ${requestId}`);
+		}
 	}
 }

@@ -4,6 +4,15 @@ import { ExtensionMessage } from "../../shared/ExtensionMessage";
 import { GrpcRequest } from "../../shared/WebviewMessage";
 import { Controller } from ".";
 
+/**
+ * Type definition for a streaming response handler
+ */
+export type StreamingResponseHandler<TResponse> = (
+	response: TResponse,
+	isLast?: boolean,
+	sequenceNumber?: number,
+) => Promise<void>;
+
 export type PostMessageToWebview = (message: ExtensionMessage) => Thenable<boolean | undefined>;
 
 /**
@@ -14,7 +23,11 @@ export async function handleGrpcRequest(
 	postMessageToWebview: PostMessageToWebview,
 	request: GrpcRequest,
 ): Promise<void> {
-	await handleUnaryRequest(controller, postMessageToWebview, request);
+	if (request.is_streaming) {
+		await handleStreamingRequest(controller, postMessageToWebview, request);
+	} else {
+		await handleUnaryRequest(controller, postMessageToWebview, request);
+	}
 }
 
 
@@ -49,6 +62,57 @@ async function handleUnaryRequest(
 			grpc_response: {
 				error: error instanceof Error ? error.message : String(error),
 				request_id: request.request_id
+			},
+		});
+	}
+}
+
+/**
+ * Handle a streaming gRPC request from the webview.
+ *
+ * Calls the handler using the service and method name, and creates a streaming response handler
+ * which posts results back to the webview.
+ */
+async function handleStreamingRequest(
+	controller: Controller,
+	postMessageToWebview: PostMessageToWebview,
+	request: GrpcRequest,
+): Promise<void> {
+	// Create a response stream function
+	const responseStream: StreamingResponseHandler<any> = async (
+		response: any,
+		isLast: boolean = false,
+		sequenceNumber?: number,
+	) => {
+		await postMessageToWebview({
+			type: "grpc_response",
+			grpc_response: {
+				message: response,
+				request_id: request.request_id,
+				is_streaming: !isLast,
+				sequence_number: sequenceNumber,
+			},
+		});
+	};
+
+	try {
+		// Get the service handler from the config
+		const handler = getHandler(request.service, request.method);
+
+		// Handle streaming request and pass the requestId to all streaming handlers
+		await handler(controller, request.message, responseStream, request.request_id);
+
+		// Don't send a final message here - the stream should stay open for future updates
+		// The stream will be closed when the client disconnects or when the service explicitly ends it
+	} catch (error) {
+		// Send error response
+		console.log("Protobus error:", error);
+		await postMessageToWebview({
+			type: "grpc_response",
+			grpc_response: {
+				error: error instanceof Error ? error.message : String(error),
+				request_id: request.request_id,
+				is_streaming: false,
 			},
 		});
 	}

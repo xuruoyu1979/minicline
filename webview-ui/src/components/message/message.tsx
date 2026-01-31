@@ -1,10 +1,15 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import "./message.css";
 import { Message, MessageOwn } from "@shared/proto/index.minicline";
 
 function Messages({ messages }: { messages: Message[] }) {
+  const endRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    endRef.current?.scrollIntoView({behavior: "smooth"});
+  },[messages]);
+  
     return (
         <>
             {messages?.map((message: Message) => (
@@ -14,6 +19,7 @@ function Messages({ messages }: { messages: Message[] }) {
                     </div>
                 </div>
             ))}
+            <div ref={endRef}></div>
         </>
     );
 }

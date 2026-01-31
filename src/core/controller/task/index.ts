@@ -10,6 +10,8 @@ import { formatResponse } from "@/core/prompts/response";
 import { TaskState } from "./TaskState";
 import { ToolExecutor } from "./ToolExecutor";
 import { MiniClineDefaultTool } from "@/shared/tools";
+import { sendMessageUpdate } from "../message/subscribeToMessage";
+import { Message, MessageOwn } from "@/shared/proto/minicline/message";
 
 export class Task {
     // Core task variables
@@ -196,6 +198,10 @@ export class Task {
         if (block) {
             switch (block.type) {
                 case "text": {
+                    sendMessageUpdate(Message.create({
+                        content: block.content,
+                        owner: MessageOwn.ASSISTANT
+                    }));
                     break;
                 }
                 case "tool_use": {
